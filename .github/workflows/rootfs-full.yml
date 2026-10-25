@@ -46,6 +46,8 @@ jobs:
 
       - name: Sparse + checksums
         run: |
+          sudo chown runner root.raw
+          chmod 644 root.raw
           python3 tools/img2simg.py root.raw root.simg
           shasum -a 256 root.raw root.simg d22ap.adt | tee SHA256SUMS
           sudo chown runner root.raw root.simg d22ap.adt SHA256SUMS
