@@ -12,9 +12,13 @@ The format is libsparse's: a little-endian 28 byte file header, then chunks of
 one of four types. Blocks that are entirely zero become DONT_CARE (written as
 nothing at the device), which is where most of the saving on a freshly
 formatted volume comes from.
+
+Implementation note: chunking is decided in a first pass that records only
+(type, block-count) per chunk -- a few kilobytes -- and the data is streamed in
+a second pass. Holding the payloads of every chunk in RAM (the previous
+implementation) OOM-kills a 7 GB runner on a 12 GB image.
 """
-import struct
-import sys
+import os, struct, sys
 
 MAGIC = 0xED26FF3A
 CHUNK_RAW = 0xCAC1
@@ -25,10 +29,12 @@ CHUNK_CRC32 = 0xCAC4
 FILE_HDR_SZ = 28
 CHUNK_HDR_SZ = 12
 BLK = 4096
+MAX_RAW_BYTES = 64 * 1024 * 1024
 
 
-def chunks(fin, size, blk):
-    """Yield (chunk_type, block_count, payload) covering the whole image."""
+def classify(fin, size, blk):
+    """Pass 1: return [(chunk_type, block_count)] covering the whole image."""
+    plan = []
     pos = 0
     while pos < size:
         data = fin.read(blk)
@@ -37,7 +43,6 @@ def chunks(fin, size, blk):
         if len(data) < blk:  # final partial block, pad it out
             data += b"\0" * (blk - len(data))
         if data.count(0) == blk:
-            # Absorb the whole run of zero blocks into one DONT_CARE chunk.
             n = 1
             while pos + n * blk < size:
                 nxt = fin.read(blk)
@@ -47,24 +52,21 @@ def chunks(fin, size, blk):
                     fin.seek(-len(nxt), 1)
                     break
                 n += 1
-            yield CHUNK_DONT_CARE, n, b""
+            plan.append((CHUNK_DONT_CARE, n))
             pos += n * blk
             continue
-        # Absorb contiguous non-zero blocks into as few RAW chunks as we can,
-        # capped so a single chunk stays well under fastboot's download limit.
         n = 1
-        buf = bytearray(data)
-        while pos + n * blk < size and n * blk < 64 * 1024 * 1024:
+        while pos + n * blk < size and n * blk < MAX_RAW_BYTES:
             nxt = fin.read(blk)
             if len(nxt) < blk:
                 nxt += b"\0" * (blk - len(nxt))
             if nxt.count(0) == blk:
                 fin.seek(-len(nxt), 1)
                 break
-            buf += nxt
             n += 1
-        yield CHUNK_RAW, n, bytes(buf)
+        plan.append((CHUNK_RAW, n))
         pos += n * blk
+    return plan
 
 
 def main(argv):
@@ -73,27 +75,34 @@ def main(argv):
         print("usage: img2simg.py IN.raw OUT.simg [BLOCKSIZE]", file=sys.stderr)
         return 2
     blk = int(argv[3]) if len(argv) == 4 else BLK
-    size = __import__("os").path.getsize(argv[1])
+    size = os.path.getsize(argv[1])
 
-    # Two passes: the header has to state the chunk count before we write any.
     with open(argv[1], "rb") as fin:
-        plan = list(chunks(fin, size, blk))
+        plan = classify(fin, size, blk)
     total_blks = (size + blk - 1) // blk
-    with open(argv[2], "wb") as out:
+
+    with open(argv[1], "rb") as fin, open(argv[2], "wb") as out:
         out.write(struct.pack("<I4H4I", MAGIC, 1, 0, FILE_HDR_SZ, CHUNK_HDR_SZ,
                               blk, total_blks, len(plan), 0))
-        written = 0
-        with open(argv[1], "rb") as fin:
-            for ctype, nblocks, payload in plan:
-                total_sz = CHUNK_HDR_SZ + len(payload)
-                out.write(struct.pack("<2H2I", ctype, 0, nblocks, total_sz))
-                if payload:
-                    out.write(payload)
-                written += nblocks
-        assert written == total_blks, (written, total_blks)
-    raw_bytes = __import__("os").path.getsize(argv[2])
-    print("%s -> %s  raw %d -> sparse %d (%.1f%%)" %
-          (argv[1], argv[2], size, raw_bytes, 100.0 * raw_bytes / size))
+        for ctype, nblocks in plan:
+            nbytes = nblocks * blk
+            # total_sz includes the 12-byte chunk header; for DONT_CARE there
+            # is no payload after the header (libsparse parses it strictly).
+            total_sz = CHUNK_HDR_SZ + (nbytes if ctype == CHUNK_RAW else 0)
+            out.write(struct.pack("<2H2I", ctype, 0, nblocks, total_sz))
+            if ctype == CHUNK_RAW:
+                remaining = nbytes
+                while remaining:
+                    b = fin.read(min(1 << 24, remaining))
+                    if not b:
+                        raise SystemExit("input shrank unexpectedly")
+                    out.write(b)
+                    remaining -= len(b)
+            else:
+                # DONT_CARE carries no payload, but the input cursor must still
+                # advance past the region it covers.
+                fin.seek(nbytes, 1)
+    print("%s -> %s" % (argv[1], argv[2]))
     return 0
 
 
