@@ -1,0 +1,62 @@
+name: rootfs-full
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipsw_url:
+        description: iPhone X (iPhone10,3) 16.7.16 (20H392) full restore IPSW
+        default: "https://updates.cdn-apple.com/2025FallFCS/fullrestores/122-77006/1158E502-D76D-4226-AA06-ED5E30CD1111/iPhone10,3,iPhone10,6_16.7.16_20H392_Restore.ipsw"
+
+env:
+  OS_DMG: "087-86698-044.dmg"       # BuildManifest "OS" (rootfs, 4.7 GB)
+  SYS_DMG: "087-86593-047.dmg"      # BuildManifest "Cryptex1,SystemOS" (2.7 GB)
+  APP_DMG: "087-86715-047.dmg"      # BuildManifest "Cryptex1,AppOS" (10.5 MB)
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download IPSW
+        run: |
+          curl -sfL --retry 3 -o ipsw.zip "${{ inputs.ipsw_url }}"
+          ls -la ipsw.zip
+          shasum -a 256 ipsw.zip || true
+
+      - name: Extract OS + cryptexes + DeviceTree
+        run: |
+          unzip -o ipsw.zip "$OS_DMG" "$SYS_DMG" "$APP_DMG" "*DeviceTree.d22ap.im4p" -d extracted
+          find extracted -name '*.dmg' -o -name '*.im4p' | xargs ls -la
+
+      - name: Extract d22ap ADT from the im4p
+        run: |
+          brew install ipsw
+          IM4P=$(find extracted -name 'DeviceTree.d22ap.im4p' | head -1)
+          ipsw img4 im4p extract "$IM4P" -o d22ap.adt
+          ls -la d22ap.adt
+          file d22ap.adt || true
+
+      - name: Build the full iOS root (case-sensitive journaled HFS+)
+        run: |
+          sudo -E bash tools/mkiosroot-macos.sh root.raw \
+            "extracted/$OS_DMG" "extracted/$SYS_DMG" "extracted/$APP_DMG"
+          ls -la root.raw
+
+      - name: Sparse + checksums
+        run: |
+          python3 tools/img2simg.py root.raw root.simg
+          shasum -a 256 root.raw root.simg d22ap.adt | tee SHA256SUMS
+          sudo chown runner root.raw root.simg d22ap.adt SHA256SUMS
+          chmod 644 root.raw root.simg d22ap.adt SHA256SUMS
+          ls -la root.simg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-root
+          path: |
+            root.simg
+            SHA256SUMS
+            d22ap.adt
+          compression-level: 0
