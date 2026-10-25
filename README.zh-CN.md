@@ -67,7 +67,22 @@ cd /path/to/ios-sweet && git checkout -b perseus-port && git commit -am "perseus
 
 ## 状态
 
+- ✅ **shim 真机验证通过（2026-10-25，MIX 3 8GB / MIUI 12.5.1 Android 10）**：
+  红底控制台点亮（0x9d400000 @1080×2340）、ABL 把 initrd 地址写进 `/chosen`
+  （payload 路径可用）、UFS 探针全绿（UFSHCI 2.1，TUR/READ rc=0，读出真实
+  GPT 分区表 persist/logdump/cust/recovery/cache/userdata，ext4）。
 - ✅ 补丁集全部生成并在合成树上验证 `git apply` 链（0099→0102、0101→0104）
-- ✅ mkadt 生成 perseus/polaris ADT；shim 在 WSL 原生编译并打包 v1 boot.img
-- ⏳ shim 探针真机验证（待 fastboot boot）
-- 🔧 stock DTB 解码、XNU CI 构建、用户空间
+- ✅ mkadt 生成 perseus/polaris ADT（`dtb/perseus.dtb` 为从 hackios boot.img
+  剥出的官方 "Perseus MP v2.1" 设备树，运行时 DTB 目录已交叉证实
+  cont_splash_region@9d400000）
+- 🔧 XNU CI 构建、payload 引导、用户空间
+
+## 上机经验（perseus ABL 的坑）
+
+1. **ABL 只在内核字段带 DTB 时才跳转**：必须是 `gzip(Image)` 后**追加**
+   `perseus.dtb`（MIUI 惯例）。缺 DTB 时 `fastboot boot` 照样返回 OKAY，但
+   ABL 静默放弃——黑屏、USB 死、无任何输出。
+2. ramdisk 用 5 字节 stub 即可；ABL 会把 initrd 实际加载地址
+   （本次为 0x055FF000）写进它递给 shim 的 DTB 的 `/chosen`。
+3. usbipd 持久绑定会抢 fastboot 设备：先 `pkill usbip-auto-attach`（WSL 侧）
+   再 `usbipd detach`。
