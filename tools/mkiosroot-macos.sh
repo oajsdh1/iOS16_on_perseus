@@ -231,7 +231,10 @@ out2="$out.final"
 rm -f "$out2"
 # +1 GiB headroom over the scratch size: the scratch volume landed at ~90%
 # full (appos is not in the size_mb budget), so give the final image room.
-mkfile -n "$((size_mb + 1024))m" "$out2"
+# 4 GiB headroom: the finalize now writes INFLATED forks (the whole point),
+# HFS+ journals + metadata overhead pushed the old +1 GiB into ENOSPC
+# ("Write to restore size failed" on the dyld cache shards).
+mkfile -n "$((size_mb + 4096))m" "$out2"
 absout=$(cd "$(dirname "$out2")" && pwd)/$(basename "$out2")
 odev=$(hdiutil attach -nomount -imagekey diskimage-class=CRawDiskImage "$absout")
 odev=$(printf '%s' "$odev" | awk 'NF{print $1}')
