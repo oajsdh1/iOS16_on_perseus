@@ -56,7 +56,7 @@ jobs:
           n=$(grep -ao 'dyld_v1' root.raw | wc -l)
           echo "dyld_v1 magic occurrences in root.raw: $n"
           [ "$n" -ge 1 ] || { echo 'ERROR: dyld cache is not inflated in the final image' >&2; exit 1; }
-          flagged=$(python3 tools/hfsxattr.py --json root.raw | python3 -c 'import json,sys;print(json.load(sys.stdin)["compressedFiles"])')
+          flagged=$(python3 tools/hfsxattr.py root.raw | awk '/files flagged/{print $NF}')
           echo "files flagged UF_COMPRESSED: $flagged"
           [ "$flagged" = 0 ] || { echo 'ERROR: UF_COMPRESSED flags remain in the catalog' >&2; exit 1; }
 
