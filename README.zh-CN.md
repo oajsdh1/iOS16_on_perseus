@@ -67,15 +67,17 @@ cd /path/to/ios-sweet && git checkout -b perseus-port && git commit -am "perseus
 
 ## 状态
 
-- ✅ **shim 真机验证通过（2026-10-25，MIX 3 8GB / MIUI 12.5.1 Android 10）**：
-  红底控制台点亮（0x9d400000 @1080×2340）、ABL 把 initrd 地址写进 `/chosen`
-  （payload 路径可用）、UFS 探针全绿（UFSHCI 2.1，TUR/READ rc=0，读出真实
-  GPT 分区表 persist/logdump/cust/recovery/cache/userdata，ext4）。
-- ✅ 补丁集全部生成并在合成树上验证 `git apply` 链（0099→0102、0101→0104）
-- ✅ mkadt 生成 perseus/polaris ADT（`dtb/perseus.dtb` 为从 hackios boot.img
-  剥出的官方 "Perseus MP v2.1" 设备树，运行时 DTB 目录已交叉证实
-  cont_splash_region@9d400000）
-- 🔧 XNU CI 构建、payload 引导、用户空间
+- 🎉 **完整贯通到用户空间（2026-10-25 深夜）**：PERSEUS 内核（CI `machine_config=PERSEUS`，
+  macos-14 runner 7 分钟编成）+ 24MB HFS+ RAMDisk 根盘（`ci/rootfs.yml`）+ `rd=md0`
+  → 真机确认 `hfs: mounted SweetRoot`、`*** SWEET userspace: init running as PID 1 ***`、
+  `SWEET init: still alive` 心跳刷屏。JaneAwA 在 polaris 上的全部已达成里程碑
+  在 perseus 复现。可用镜像：`out/perseus-init-boot.img`（42MB）。
+- ✅ shim 真机验证：红底控制台（0x9d400000 @1080×2340）、initrd 写入 `/chosen`、
+  UFS 探针全绿（UFSHCI 2.1，TUR/READ rc=0，GPT 分区表读出）。
+- ✅ 补丁集 `git apply` 链验证；mkadt 双机器 ADT；`dtb/perseus.dtb` 为官方
+  "Perseus MP v2.1" 树（运行时 DTB 已交叉证实 cont_splash@9d400000）。
+- 🔧 完整用户空间：iPhone X (iPhone10,3) iOS 16.7.16 IPSW → `mkiosroot-macos.sh`
+  完整根盘 → 锁屏；触摸驱动（IC 待查）；多核；8GB highmem。
 
 ## 上机经验（perseus ABL 的坑）
 
