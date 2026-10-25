@@ -23,7 +23,9 @@
 set -euo pipefail
 
 [[ $# -ge 4 ]] || { sed -n '2,22p' "$0"; exit 2; }
-out=$1 osimg=$2 sysimg=$3 appimg=$4 headroom=${5:-1048576}
+out=$1 osimg=$2 sysimg=$3 appimg=$4 # 4 GiB: ~700k files inflate to more than du suggests once 4K block
+# rounding + HFS+ metadata + the journal are paid for.
+headroom=${5:-4194304}
 label=${LABEL:-iOSRoot}
 
 mounts=()
