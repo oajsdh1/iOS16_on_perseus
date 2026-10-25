@@ -44,6 +44,20 @@ jobs:
             "extracted/$OS_DMG" "extracted/$SYS_DMG" "extracted/$APP_DMG"
           ls -la root.raw
 
+      - name: Content gate (no compressed forks may reach the phone)
+        run: |
+          # The kernel has no LZVN decompressor: any compressed fork on the
+          # volume is an instant EOPNOTSUPP(45) boot blocker. The inflated
+          # dyld cache contains the literal 'dyld_v1  arm64' magic; the
+          # compressed form would not. This reads the RAW bytes, so it cannot
+          # be fooled by macOS's inflate-on-read view.
+          n=$(grep -ao 'dyld_v1  arm64' root.raw | wc -l)
+          echo "dyld_v1 magic occurrences in root.raw: $n"
+          [ "$n" -ge 1 ] || { echo 'ERROR: dyld cache is not inflated in the final image' >&2; exit 1; }
+          flagged=$(python3 tools/hfsxattr.py --json root.raw | python3 -c 'import json,sys;print(json.load(sys.stdin)["compressedFiles"])')
+          echo "files flagged UF_COMPRESSED: $flagged"
+          [ "$flagged" = 0 ] || { echo 'ERROR: UF_COMPRESSED flags remain in the catalog' >&2; exit 1; }
+
       - name: Sparse + checksums
         run: |
           sudo chown runner root.raw

@@ -121,7 +121,10 @@ copy() {
 	# "Result too large (34)" partway through the system cryptex. bsdtar is
 	# 64 bit and carries the same set of attributes rsync was carrying for us
 	# (owner, mode, symlinks, hard links, xattrs).
-	(sudo tar -cf - -C "$1" .) | (sudo tar -xpf - -C "$2")
+	# --no-xattrs/--no-mac-metadata/--no-fflags: macOS bsdtar ignores
+	# COPYFILE_DISABLE and happily stores decmpfs xattrs + the UF_COMPRESSED
+	# flag; the kernel has no LZVN decompressor and returns EOPNOTSUPP(45).
+	(sudo tar --no-xattrs --no-mac-metadata --no-fflags -cf - -C "$1" .) | (sudo tar --no-xattrs --no-mac-metadata --no-fflags -xpf - -C "$2")
 }
 copy "$osroot" "$mp"
 copy "$sysroot" "$mp/private/preboot/Cryptexes/OS"
@@ -276,7 +279,7 @@ echo "mounted final $omounted at $omp"
 # tar writes the kext-inflated data fork as a plain, uncompressed file.
 echo "bulk-copying volume (inflating decmpfs, COPYFILE_DISABLE=1) into final image..."
 set +e
-( cd "$mp" && sudo env COPYFILE_DISABLE=1 tar -cf - . ) | ( cd "$omp" && sudo env COPYFILE_DISABLE=1 tar -xpf - )
+( cd "$mp" && sudo tar --no-xattrs --no-mac-metadata --no-fflags -cf - . ) | ( cd "$omp" && sudo tar --no-xattrs --no-mac-metadata --no-fflags -xpf - )
 rc=${PIPESTATUS[1]}
 set -e
 if [ "$rc" -ne 0 ]; then echo "ERROR: bulk copy tar failed (exit $rc)" >&2; exit 1; fi
