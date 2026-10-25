@@ -1,0 +1,32 @@
+name: rootfs
+
+on:
+  workflow_dispatch:
+    inputs:
+      size_mb:
+        description: minimal HFS+ root size in MB (RAMDisk)
+        default: "24"
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build minimal HFS+ root (sweet-init as /sbin/launchd)
+        env:
+          SIZE_MB: ${{ inputs.size_mb || '24' }}
+        run: |
+          python3 -c "import base64,sys;sys.stdout.buffer.write(base64.b64decode(open('tools/sweet-init.b64').read()))" > /tmp/launchd
+          chmod +x /tmp/launchd
+          file /tmp/launchd
+          sudo -E bash tools/mkhfsroot.sh root.img "$SIZE_MB" /tmp/launchd
+          shasum -a 256 root.img | tee root.img.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hfs-root
+          path: |
+            root.img
+            root.img.sha256
