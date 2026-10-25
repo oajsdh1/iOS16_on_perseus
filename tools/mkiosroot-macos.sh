@@ -287,7 +287,7 @@ echo "mounted final $omounted at $omp"
 echo "bulk-copying volume (inflating decmpfs, COPYFILE_DISABLE=1) into final image..."
 set +e
 sudo ditto --norsrc --noextattr "$mp" "$omp"
-rc=${PIPESTATUS[1]}
+rc=$?
 set -e
 if [ "$rc" -ne 0 ]; then echo "ERROR: bulk copy tar failed (exit $rc)" >&2; exit 1; fi
 echo "bulk copy done"
