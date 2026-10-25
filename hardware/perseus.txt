@@ -1,0 +1,60 @@
+# Xiaomi Mi MIX 3 (perseus) hardware parameters
+# Source: same Qualcomm SDM845 platform as polaris (Mi MIX 2S); values below are
+#         cross-checked against the polaris decode (hardware/polaris.txt in
+#         JaneAwA/iOS16_on_mix2s) and the hackios xnuloader work on a real MIX 3.
+# Status: [V] = device-verified, [P] = proven on polaris (same SoC), [A] = assumed
+#         pending a stock perseus DTB decode.
+# Purpose: these values are written into the AppleDeviceTree by tools/mkadt.py
+#          ('perseus' entry) and into the shim's framebuffer constants.
+
+[Interrupts / GICv3]           -- [P] identical SDM845 plumbing
+GICD           0x17a00000  size 0x10000
+GICR           0x17a60000  size 0x100000
+virtual timer PPI  INTID 19               (QTI numbering phys/virt/hyp = 2/3/0)
+security state  dual security; Group0 owned by TZ, remaining Group1 NS (IRQ)
+
+[Display / framebuffer]
+FB base          0x9d400000   [V] hackios xnuloader drew its console at this
+                              address on a real MIX 3 (platform_perseus,
+                              fb_base=0x9d400000, screen output confirmed)
+FB size          0x2400000    [A] same cont_splash carve as polaris; only
+                              needs to cover 1080*2340*4 = 9.6 MB of the 36 MB
+physical res      1080x2340   [V] MIX 3 panel (notch), vs polaris 1080x2160
+stride            1080*4      a8r8g8b8
+IOMFB canvas      1080x2340
+panel             Samsung AMOLED, exact part + framerate TBD from stock DTB
+
+[Storage / UFS host controller]  -- [P] same SoC instance
+UFSHC          0x1d84000   size 0x2500
+
+[Memory]
+DDR base         0x80000000
+kernel-managed   PHYS_BASE 0xb0000000, MEM_SIZE 0x4d000000  [P] above the
+                 SDM845 carve-outs (0x85700000..0x9f800000), same as polaris
+highmem          -- the port test device is the 8 GB MIX 3: upper bank starts
+                 at 0x100000000; --highmem size must be re-derived from the
+                 stock DTB memory node (polaris's 0xfcc00000 is a 4 GB value)
+
+[CPU topology]  [P] SDM845 Kryo 385 big.LITTLE, identical to polaris
+8 cores: cluster0 = Cortex-A75 @ 2.8 GHz (cores 0-3, big-first),
+         cluster1 = Cortex-A55 @ 1.8 GHz (cores 4-7)
+DTB reg = 0x0,0x100,...,0x700  flat linear MPIDR; ADT exposes one flat cluster
+no PAC pointer authentication -> kernel stays pure arm64 (PERSEUS machine
+config defines ARM64_BOARD_CONFIG_SWEET too, like POLARIS does)
+
+[Boot image]
+header_version   1  [V] perseus ABL (2018 Pie-era) has no v2 DTB support; the
+                 hackios UEFI images booted on this exact phone as v1 with
+                 default base/offsets (kernel 0x10008000, ramdisk 0x11000000,
+                 tags 0x10000100) and pagesize 2048, no dtb field.
+DTB              stock perseus boot.img DTB still needed later for the XNU
+                 payload stage (ABL patches /chosen linux,initrd-* into the
+                 DTB it hands the shim); extract from a MIUI fastboot ROM with
+                 ci/decode_dtb.py --boot boot.img --outdir dtb_out --match perseus
+
+[Other]
+touch             TBD - polaris is synaptics,dsx-i2c-force; MIX 3 IC unknown
+                  until the stock DTB is decoded (I2C nodes under qup_blsp)
+PMIC              PM8998 + PMI8998 + PM8005  [P]
+GPU               Adreno 630  [P]
+UART / console    qup_uart@0xa84000  [P]
