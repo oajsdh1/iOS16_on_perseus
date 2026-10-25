@@ -31,11 +31,17 @@ if [ -n "${1:-}" ]; then
 else
 	(cd out && rm -rf rd && mkdir rd && cd rd && find . | cpio -o -H newc --quiet | gzip -9 > ../ramdisk.bin)
 fi
+# perseus ABL (MIUI, Android 10 firmware) only hands off when the kernel field
+# carries the device DTB: gzipped Image with the stock perseus.dtb appended
+# after the gzip stream (the MIUI convention - without it the boot path bails
+# silently: black screen, no jump). ramdisk: the ABL takes a 5-byte stub fine.
+gzip -9 -c out/Image > out/Image.gz
+cat out/Image.gz ../dtb/perseus.dtb > out/kernel.gz.dtb
 # Vendored AOSP mkbootimg (tools/mkbootimg.py): Ubuntu 24.04's packaged
 # mkbootimg imports a gki module that ships broken. Override with MKBOOTIMG=...
 # if you have a working one on PATH.
 MKBOOTIMG=${MKBOOTIMG:-../tools/mkbootimg.py}
-python3 "$MKBOOTIMG" --header_version 1 --kernel out/Image --ramdisk out/ramdisk.bin \
+python3 "$MKBOOTIMG" --header_version 1 --kernel out/kernel.gz.dtb --ramdisk ../dtb/ramdisk.stub \
 	--pagesize 2048 -o out/shim-boot.img
 # Host render of the console layout.
 gcc -O1 -Wall -o out/host_test console.c host_test.c && ./out/host_test
