@@ -23,9 +23,7 @@ index b5addb4..eac5e90 100644
  jobs:
    build:
 diff --git a/shim/build.sh b/shim/build.sh
-old mode 100755
-new mode 100644
-index ffc86a3..28f27a0
+index ffc86a3..28f27a0 100755
 --- a/shim/build.sh
 +++ b/shim/build.sh
 @@ -1,5 +1,8 @@
