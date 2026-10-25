@@ -238,7 +238,9 @@ rm -f "$out2"
 # 4 GiB headroom: the finalize now writes INFLATED forks (the whole point),
 # HFS+ journals + metadata overhead pushed the old +1 GiB into ENOSPC
 # ("Write to restore size failed" on the dyld cache shards).
-mkfile -n "$((size_mb + 4096))m" "$out2"
+# need + 5 GiB was proven sufficient on the run that completed the copy
+# (assembly already carries +4 GiB).
+mkfile -n "$((size_mb + 1024))m" "$out2"
 absout=$(cd "$(dirname "$out2")" && pwd)/$(basename "$out2")
 odev=$(hdiutil attach -nomount -imagekey diskimage-class=CRawDiskImage "$absout")
 odev=$(printf '%s' "$odev" | awk 'NF{print $1}')

@@ -44,6 +44,11 @@ jobs:
             "extracted/$OS_DMG" "extracted/$SYS_DMG" "extracted/$APP_DMG"
           ls -la root.raw
 
+      - name: Free disk (runner is tight with both volumes present)
+        run: |
+          rm -f ipsw.zip extracted/*.dmg
+          df -h / | tail -1
+
       - name: Content gate (no compressed forks may reach the phone)
         run: |
           # The kernel has no LZVN decompressor: any compressed fork on the
