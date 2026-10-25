@@ -51,6 +51,8 @@ jobs:
           # dyld cache contains the literal 'dyld_v1  arm64' magic; the
           # compressed form would not. This reads the RAW bytes, so it cannot
           # be fooled by macOS's inflate-on-read view.
+          sudo chown runner root.raw
+          chmod 644 root.raw
           n=$(grep -ao 'dyld_v1  arm64' root.raw | wc -l)
           echo "dyld_v1 magic occurrences in root.raw: $n"
           [ "$n" -ge 1 ] || { echo 'ERROR: dyld cache is not inflated in the final image' >&2; exit 1; }
